@@ -1,0 +1,155 @@
+/* MAXTEMPERATURE
+package com.tem;
+
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.io.IntWritable;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapreduce.Job;
+import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
+import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
+//import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
+public class MaxTemperature {
+public static void main(String[] args) throws Exception {
+if (args.length != 2) {
+System.err.println("Usage: MaxTemperature <input path> <output path>");
+System.exit(-1);
+}
+Job job = new Job();
+job.setJarByClass(MaxTemperature.class);
+job.setJobName("Max temperature");
+FileInputFormat.addInputPath(job, new Path(args[0]));
+FileOutputFormat.setOutputPath(job, new Path(args[1]));
+job.setMapperClass(MaxTemperatureMapper.class);
+job.setReducerClass(MaxTemperatureReducer.class);
+job.setOutputKeyClass(Text.class);
+job.setOutputValueClass(IntWritable.class);
+System.exit(job.waitForCompletion(true) ? 0 : 1);
+}
+}
+
+
+
+package com.tem;
+
+import java.io.IOException;
+import org.apache.hadoop.io.IntWritable;
+import org.apache.hadoop.io.LongWritable;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapreduce.Mapper;
+public class MaxTemperatureMapper
+extends Mapper<LongWritable, Text, Text, IntWritable> {
+private static final int MISSING = 9999;
+@Override
+public void map(LongWritable key, Text value, Context context)
+throws IOException, InterruptedException {
+String line = value.toString();
+String year = line.substring(15, 19);
+int airTemperature;
+if (line.charAt(87) == '+') { // parseInt doesn't like leading plus signs
+airTemperature = Integer.parseInt(line.substring(88, 92));
+} else {
+airTemperature = Integer.parseInt(line.substring(87, 92));
+}
+String quality = line.substring(92, 93);
+if (airTemperature != MISSING && quality.matches("[01459]")) {
+context.write(new Text(year), new IntWritable(airTemperature));
+}
+}
+}
+
+package com.tem;
+
+import java.io.IOException;
+import org.apache.hadoop.io.IntWritable;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapreduce.Reducer;
+public class MaxTemperatureReducer
+extends Reducer<Text, IntWritable, Text, IntWritable> {
+@Override
+public void reduce(Text key, Iterable<IntWritable> values,
+Context context)
+throws IOException, InterruptedException {
+int maxValue = Integer.MIN_VALUE;
+for (IntWritable value : values) {
+maxValue = Math.max(maxValue, value.get());
+}
+context.write(key, new IntWritable(maxValue));
+}
+}
+
+
+$ hadoop jar temp.jar com.tem.MaxTemperature /user/cloudera/bhaskar/tt2.txt /user/cloudera/bhaskar/w8
+/MRUNIT
+
+import java.io.IOException;
+import org.apache.hadoop.io.IntWritable;
+import org.apache.hadoop.io.LongWritable;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapreduce.Mapper;
+public class MaxTemperatureMapper
+extends Mapper<LongWritable, Text, Text, IntWritable> {
+@Override
+public void map(LongWritable key, Text value, Context context)
+throws IOException, InterruptedException {
+String line = value.toString();
+String year = line.substring(15, 19);
+int airTemperature = Integer.parseInt(line.substring(87, 92));
+context.write(new Text(year), new IntWritable(airTemperature));
+}
+}
+
+
+import java.io.IOException;
+import java.util.Arrays;
+import org.apache.hadoop.io.IntWritable;
+import org.apache.hadoop.io.LongWritable;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mrunit.mapreduce.MapDriver;
+import org.apache.hadoop.mrunit.mapreduce.ReduceDriver;
+import org.junit.Test;
+public class MaxTemperatureMapperTest {
+	
+@Test
+public void processesValidRecord() throws IOException, InterruptedException {
+Text value = new Text("0043011990999991950051518004+68750+023550FM-12+0382" +
+"99999V0203201N00261220001CN9999999N9-00111+99999999999");
+new MapDriver<LongWritable, Text, Text, IntWritable>()
+.withMapper(new MaxTemperatureMapper())
+.withInput(new LongWritable(0), value)
+.withOutput(new Text("1950"), new IntWritable(-11))
+.runTest();
+}
+
+@Test
+public void returnsMaximumIntegerInValues() throws IOException,
+InterruptedException {
+new ReduceDriver<Text, IntWritable, Text, IntWritable>()
+.withReducer(new MaxTemperatureReducer())
+.withInput(new Text("1950"),
+Arrays.asList(new IntWritable(10), new IntWritable(5)))
+.withOutput(new Text("1950"), new IntWritable(10))
+.runTest();
+}
+}
+
+import java.io.IOException;
+
+import org.apache.hadoop.io.IntWritable;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapreduce.Reducer;
+public class MaxTemperatureReducer
+extends Reducer<Text, IntWritable, Text, IntWritable> {
+@Override
+public void reduce(Text key, Iterable<IntWritable> values, Context context)
+throws IOException, InterruptedException {
+int maxValue = Integer.MIN_VALUE;
+for (IntWritable value : values) {
+maxValue = Math.max(maxValue, value.get());
+}
+context.write(key, new IntWritable(maxValue));
+}
+}
+
+
+
+
